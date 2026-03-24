@@ -480,6 +480,8 @@ var dashboardFilters = {
   custom: {}
 };
 
+var dashboardDateFilter = { type: "all", startDate: null, endDate: null, label: "All Time" };
+
 function countActiveCustomFilters(filters) {
   const custom = filters?.custom || {};
   let count = 0;
@@ -783,27 +785,15 @@ function showDashboardFilterMenu() {
       `;
     }).join("");
 
-  const groupable = defs.filter(d => d && (d.type === "text" || d.type === "date"));
-  const groupKey = window.dashboardCustomGroupKey || "";
-
   const menu = `
-    <div id="dashboardFilterOverlay" class="fixed inset-0 bg-black/50 z-40 transition-opacity" onclick="closeDashboardFilterMenu()"></div>
-    <div id="dashboardFilterSheet" class="fixed bottom-20 inset-x-0 max-h-[70vh] overflow-y-auto bg-gray-900 rounded-t-xl p-4 z-50 transform transition-transform duration-300 translate-y-full">
-      <div class="flex items-center justify-between mb-3">
-        <div class="text-lg font-bold">Chart Filters</div>
-        <button onclick="resetDashboardFilters()" class="text-xs text-gray-400">Reset</button>
+    <div id=”dashboardFilterOverlay” class=”fixed inset-0 bg-black/50 z-40 transition-opacity” onclick=”closeDashboardFilterMenu()”></div>
+    <div id=”dashboardFilterSheet” class=”fixed bottom-20 inset-x-0 max-h-[70vh] overflow-y-auto bg-gray-900 rounded-t-xl p-4 z-50 transform transition-transform duration-300 translate-y-full”>
+      <div class=”flex items-center justify-between mb-3”>
+        <div class=”text-lg font-bold”>Filters</div>
+        <button onclick=”resetDashboardFilters()” class=”text-xs text-gray-400”>Reset</button>
       </div>
 
-      <div class="space-y-3">
-        <div class="bg-gray-800/50 rounded p-3 space-y-2">
-          <div class="text-xs text-gray-300">Group “Custom” chart by</div>
-          <select id="df_group_key" class="w-full p-2 bg-gray-800 rounded text-sm text-gray-100">
-            <option value="">(Pick a field)</option>
-            ${groupable.map(d => `<option value="${d.key}" ${d.key === groupKey ? 'selected' : ''}>${d.label}</option>`).join("")}
-          </select>
-          <div class="text-[11px] text-gray-400">This only affects the “Custom” chart tab.</div>
-        </div>
-
+      <div class=”space-y-3”>
         ${textSections}
         ${numericSections}
 
@@ -838,7 +828,6 @@ function closeDashboardFilterMenu() {
 
 function resetDashboardFilters() {
   dashboardFilters = { custom: {} };
-  window.dashboardCustomGroupKey = "";
   renderDashboard();
   closeDashboardFilterMenu();
 }
@@ -870,7 +859,6 @@ function applyDashboardFiltersFromUI() {
   });
 
   dashboardFilters = next;
-  window.dashboardCustomGroupKey = document.getElementById("df_group_key")?.value || "";
 
   renderDashboard();
   closeDashboardFilterMenu();
@@ -1460,92 +1448,130 @@ function switchTab(tab) {
 /* ================================
    DASHBOARD WITH CHARTS
 ================================= */
+function getDashboardFilteredRecords(records) {
+  const df = dashboardDateFilter;
+  if (!df || df.type === 'all') return records;
+
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth();
+  let startDate, endDate;
+
+  if (df.type === 'month') {
+    startDate = new Date(currentYear, currentMonth, 1);
+    endDate = new Date(currentYear, currentMonth + 1, 0);
+  } else if (df.type === 'ytd') {
+    startDate = new Date(currentYear, 0, 1);
+    endDate = today;
+  } else if (df.type === 'past3months') {
+    startDate = new Date(currentYear, currentMonth - 3, 1);
+    endDate = today;
+  } else if (df.type === 'range' && df.startDate && df.endDate) {
+    startDate = new Date(df.startDate);
+    endDate = new Date(df.endDate);
+  } else {
+    return records;
+  }
+
+  const startStr = startDate.toISOString().split('T')[0];
+  const endStr = endDate.toISOString().split('T')[0];
+  return records.filter(r => {
+    const d = r._virtualDate || r.date;
+    return d >= startStr && d <= endStr;
+  });
+}
+
 function renderDashboard() {
   const data = loadData();
-  // Expand recurring templates before computing dashboard totals
   const records = expandRecurringEntries(data.records.filter(r => !r.deleted));
   const defs = data.customFields || [];
-  
-  // Calculate stats
-  const today = new Date();
-  const thisMonth = today.toISOString().slice(0, 7);
-  
-  // This month
-  const thisMonthRecords = records.filter(r => r.date && r.date.startsWith(thisMonth));
-  const thisMonthTotal = thisMonthRecords.reduce((sum, r) => {
-    return sum + calculateRecordTotal(r, defs);
-  }, 0);
-  const thisMonthHours = thisMonthRecords.reduce((sum, r) => sum + (parseFloat(r.hours) || 0), 0);
-  
-  // Last month
-  const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const lastMonthStr = lastMonth.toISOString().slice(0, 7);
-  const lastMonthRecords = records.filter(r => r.date && r.date.startsWith(lastMonthStr));
-  const lastMonthTotal = lastMonthRecords.reduce((sum, r) => {
-    return sum + calculateRecordTotal(r, defs);
-  }, 0);
-  
-  // All time
-  const allTimeTotal = records.reduce((sum, r) => {
-    return sum + calculateRecordTotal(r, defs);
-  }, 0);
-  const allTimeHours = records.reduce((sum, r) => sum + (parseFloat(r.hours) || 0), 0);
-  
-  // Change percentage
-  const change = lastMonthTotal > 0 ? ((thisMonthTotal - lastMonthTotal) / lastMonthTotal * 100).toFixed(0) : 0;
-  const isUp = change >= 0;
-  
-  // Top locations
+
+  // Apply dashboard date + custom filters
+  const dateFiltered = getDashboardFilteredRecords(records);
+  const filtered = applyCustomFilters(dateFiltered, defs, dashboardFilters);
+
+  // Hero stats
+  const heroTotal  = filtered.reduce((sum, r) => sum + calculateRecordTotal(r, defs), 0);
+  const heroHours  = filtered.reduce((sum, r) => sum + (parseFloat(r.hours) || 0), 0);
+  const heroShifts = filtered.length;
+
+  // vs-last-month comparison (only when showing "This Month")
+  let changeHtml = '';
+  if (dashboardDateFilter.type === 'month') {
+    const today = new Date();
+    const prevMonthStr = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().slice(0, 7);
+    const prevTotal = applyCustomFilters(
+      records.filter(r => r.date && r.date.startsWith(prevMonthStr)),
+      defs, dashboardFilters
+    ).reduce((sum, r) => sum + calculateRecordTotal(r, defs), 0);
+    const change = prevTotal > 0 ? ((heroTotal - prevTotal) / prevTotal * 100).toFixed(0) : 0;
+    const isUp = change >= 0;
+    changeHtml = `<div class="text-center text-sm ${isUp ? 'text-green-400' : 'text-red-400'}">${isUp ? '↑' : '↓'} ${Math.abs(change)}% vs last month</div>`;
+  }
+
+  // Top locations from filtered set
   const locationTotals = {};
-  records.forEach(r => {
+  filtered.forEach(r => {
     locationTotals[r.location] = (locationTotals[r.location] || 0) + calculateRecordTotal(r, defs);
   });
-  const topLocations = Object.entries(locationTotals)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
-  
-  // Update date filter for charts based on history filter
-  if (typeof dateFilter === 'undefined') {
-    dateFilter = { type: "all", startDate: null, endDate: null, label: "All Time" };
-  }
-  
+  const topLocations = Object.entries(locationTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  const activeFilters = countActiveCustomFilters(dashboardFilters);
+
   $("app").innerHTML = `
     <div class="p-4 space-y-4">
-      <!-- Stats Summary -->
-      <div class="text-center text-gray-400 text-sm">${dateFilter.label}</div>
-      <div class="text-center text-4xl font-bold">${money(thisMonthTotal)}</div>
-      <div class="text-center ${isUp ? 'text-green-400' : 'text-red-400'}">
-        ${isUp ? '↑' : '↓'} ${Math.abs(change)}% vs last month
+
+      <!-- Date badge + filter icon row -->
+      <div class="flex items-center justify-between pt-1">
+        <button onclick="showDashboardDatePicker()"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+          style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.22);color:#818cf8;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          <span>${dashboardDateFilter.label}</span>
+          <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2.5 4.5L6 8l3.5-3.5"/></svg>
+        </button>
+
+        <button onclick="showDashboardFilterMenu()"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+          style="background:${activeFilters ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.04)'};border:1px solid ${activeFilters ? 'rgba(99,102,241,0.30)' : 'rgba(255,255,255,0.08)'};color:${activeFilters ? '#818cf8' : '#6b7280'};">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+          </svg>
+          ${activeFilters ? `<span class="text-[11px]">${activeFilters}</span>` : ''}
+        </button>
       </div>
-      
-      <div class="grid grid-cols-2 gap-4">
-        <div class="bg-gray-800 rounded p-4 text-center">
-          <div class="text-gray-400 text-xs">This Month Hours</div>
-          <div class="text-xl font-bold">${thisMonthHours.toFixed(1)}</div>
-        </div>
-        <div class="bg-gray-800 rounded p-4 text-center">
-          <div class="text-gray-400 text-xs">All Time</div>
-          <div class="text-xl font-bold">${money(allTimeTotal)}</div>
-        </div>
-      </div>
-      
-      <!-- More Stats -->
+
+      <!-- Hero total -->
+      <div class="text-center text-4xl font-bold">${money(heroTotal)}</div>
+      ${changeHtml}
+
+      <!-- Stats grid -->
       <div class="grid grid-cols-3 gap-2">
         <div class="bg-gray-800 rounded p-3 text-center">
           <div class="text-gray-400 text-xs">Shifts</div>
-          <div class="text-lg font-bold">${thisMonthRecords.length}</div>
+          <div class="text-lg font-bold">${heroShifts}</div>
         </div>
         <div class="bg-gray-800 rounded p-3 text-center">
           <div class="text-gray-400 text-xs">Avg/Shift</div>
-          <div class="text-lg font-bold">${thisMonthRecords.length ? money(thisMonthTotal / thisMonthRecords.length) : '$0'}</div>
+          <div class="text-lg font-bold">${heroShifts ? money(heroTotal / heroShifts) : '$0'}</div>
         </div>
         <div class="bg-gray-800 rounded p-3 text-center">
           <div class="text-gray-400 text-xs">Avg/Hour</div>
-          <div class="text-lg font-bold">${thisMonthHours ? money(thisMonthTotal / thisMonthHours) : '$0'}</div>
+          <div class="text-lg font-bold">${heroHours ? money(heroTotal / heroHours) : '$0'}</div>
         </div>
       </div>
-      
+
+      ${heroHours > 0 ? `
+      <div class="bg-gray-800 rounded p-4 text-center">
+        <div class="text-gray-400 text-xs mb-1">Total Hours</div>
+        <div class="text-2xl font-bold">${heroHours.toFixed(1)}</div>
+      </div>
+      ` : ''}
+
       <!-- Top Locations -->
+      ${topLocations.length > 0 ? `
       <div class="bg-gray-800 rounded p-4">
         <div class="text-gray-400 text-xs mb-2">Top Locations</div>
         ${topLocations.map(([loc, total]) => `
@@ -1555,47 +1581,24 @@ function renderDashboard() {
           </div>
         `).join("")}
       </div>
-      
-      <!-- Charts Section -->
+      ` : ''}
+
+      <!-- Analytics / Charts -->
       <div class="bg-gray-800 rounded p-4">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-gray-400 text-xs">Analytics</div>
-          <div class="flex items-center gap-2">
-            <button onclick="showDashboardFilterMenu()" class="text-[11px] text-gray-400 hover:text-gray-200 flex items-center gap-2">
-              <span>Filters</span>
-              ${(() => {
-                const n = countActiveCustomFilters(dashboardFilters);
-                return n ? `<span class="text-[10px] bg-indigo-600/30 text-indigo-200 px-2 py-0.5 rounded-full">${n}</span>` : '';
-              })()}
-            </button>
-            ${countActiveCustomFilters(dashboardFilters) ? `<button onclick="clearDashboardFiltersQuick()" class="text-[11px] text-gray-500 hover:text-gray-300">Clear</button>` : ''}
-          </div>
-        </div>
-        
-        <!-- Chart Type Tabs -->
+        <div class="text-gray-400 text-xs mb-3">Analytics</div>
         ${renderChartControls()}
-        
-        <!-- Chart Containers (simple SVG charts) -->
-        <div id="chartContainers" class="relative" style="height: 320px;">
-          <div id="locationPieChart" class="w-full h-full"></div>
-          <div id="tipsVsHourlyChart" class="w-full h-full hidden"></div>
-          <div id="dailyIncomeChart" class="w-full h-full hidden"></div>
-          <div id="hoursByLocationChart" class="w-full h-full hidden"></div>
-          <div id="customFieldChart" class="w-full h-full hidden"></div>
-        </div>
-        
-        <!-- Chart Date Filter -->
-        <div class="mt-3 pt-3 border-t border-gray-700">
-          <button onclick="showChartDateFilter()" class="w-full text-xs bg-gray-700 px-3 py-2 rounded flex justify-between items-center">
-            <span class="text-gray-400">Chart Range:</span>
-            <span class="text-indigo-400">${dateFilter.label}</span>
-          </button>
+        <div id="chartContainers" class="relative" style="min-height: 180px;">
+          <div id="locationPieChart" class="w-full"></div>
+          <div id="tipsVsHourlyChart" class="w-full hidden"></div>
+          <div id="dailyIncomeChart" class="w-full hidden"></div>
+          <div id="hoursByLocationChart" class="w-full hidden"></div>
+          <div id="customChartDisplay" class="w-full hidden"></div>
         </div>
       </div>
+
     </div>
   `;
-  
-  // Render charts after DOM is ready
+
   renderAllCharts();
 }
 
@@ -1647,9 +1650,242 @@ function setChartDateFilter(type, start, end, label) {
   renderDashboard();
 }
 
+/* ── Dashboard date picker ─────────────────────────────────────── */
+function showDashboardDatePicker() {
+  const opts = [
+    { type: 'all',         label: 'All Time' },
+    { type: 'month',       label: 'This Month' },
+    { type: 'past3months', label: 'Past 3 Months' },
+    { type: 'ytd',         label: 'Year to Date' },
+  ];
+
+  const menu = `
+    <div id="dashDateOverlay" class="fixed inset-0 bg-black/50 z-40" onclick="closeDashDatePicker()"></div>
+    <div id="dashDateSheet" class="fixed bottom-20 inset-x-0 bg-gray-900 rounded-t-xl p-4 z-50 transform transition-transform duration-300 translate-y-full">
+      <div class="text-lg font-bold mb-4">Date Range</div>
+      <div class="space-y-2">
+        ${opts.map(o => `
+          <button onclick="setDashboardDateFilter('${o.type}', null, null, '${o.label}')"
+            class="w-full p-3 rounded text-left flex items-center justify-between ${dashboardDateFilter.type === o.type ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-200'}">
+            <span>${o.label}</span>
+            ${dashboardDateFilter.type === o.type ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>' : ''}
+          </button>
+        `).join('')}
+        <button onclick="showDashboardCustomRangePicker()"
+          class="w-full p-3 rounded text-left flex items-center justify-between ${dashboardDateFilter.type === 'range' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-200'}">
+          <span>${dashboardDateFilter.type === 'range' ? dashboardDateFilter.label : 'Custom Range...'}</span>
+          ${dashboardDateFilter.type === 'range'
+            ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>'
+            : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>'}
+        </button>
+      </div>
+      <button onclick="closeDashDatePicker()" class="w-full bg-gray-700 p-3 rounded mt-4">Cancel</button>
+    </div>
+  `;
+
+  const existing = $('dashDateSheet');
+  if (existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', menu);
+  requestAnimationFrame(() => {
+    const sheet = $('dashDateSheet');
+    const overlay = $('dashDateOverlay');
+    if (sheet) sheet.classList.remove('translate-y-full');
+  });
+}
+
+function closeDashDatePicker() {
+  const sheet = $('dashDateSheet');
+  const overlay = $('dashDateOverlay');
+  if (sheet) sheet.classList.add('translate-y-full');
+  setTimeout(() => {
+    if (sheet) sheet.remove();
+    if (overlay) overlay.remove();
+  }, 250);
+}
+
+function setDashboardDateFilter(type, start, end, label) {
+  dashboardDateFilter = { type, startDate: start, endDate: end, label };
+  closeDashDatePicker();
+  renderDashboard();
+}
+
+function showDashboardCustomRangePicker() {
+  closeDashDatePicker();
+  const today = new Date().toISOString().split('T')[0];
+  const twoWeeksAgo = new Date();
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+  const twoWeeksAgoStr = twoWeeksAgo.toISOString().split('T')[0];
+  const startVal = dashboardDateFilter.type === 'range' ? (dashboardDateFilter.startDate || twoWeeksAgoStr) : twoWeeksAgoStr;
+  const endVal   = dashboardDateFilter.type === 'range' ? (dashboardDateFilter.endDate   || today) : today;
+
+  const menu = `
+    <div id="dashDateOverlay" class="fixed inset-0 bg-black/50 z-40" onclick="closeDashDatePicker()"></div>
+    <div id="dashDateSheet" class="fixed bottom-20 inset-x-0 bg-gray-900 rounded-t-xl p-4 z-50 transform transition-transform duration-300 translate-y-full">
+      <div class="text-lg font-bold mb-4">Custom Range</div>
+      <div class="space-y-4">
+        <div>
+          <label class="text-sm text-gray-400">Start Date</label>
+          <input type="date" id="dashRangeStart" value="${startVal}" class="w-full p-3 mt-1 bg-transparent text-gray-100 appearance-none border border-gray-700 rounded">
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">End Date</label>
+          <input type="date" id="dashRangeEnd" value="${endVal}" class="w-full p-3 mt-1 bg-transparent text-gray-100 appearance-none border border-gray-700 rounded">
+        </div>
+        <button onclick="applyDashboardCustomRange()" class="w-full bg-indigo-600 p-3 rounded font-semibold">Apply</button>
+      </div>
+      <button onclick="closeDashDatePicker()" class="w-full bg-gray-700 p-3 rounded mt-4">Cancel</button>
+    </div>
+  `;
+
+  const existing = $('dashDateSheet');
+  if (existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', menu);
+  requestAnimationFrame(() => {
+    const sheet = $('dashDateSheet');
+    if (sheet) sheet.classList.remove('translate-y-full');
+  });
+}
+
+function applyDashboardCustomRange() {
+  const start = $('dashRangeStart')?.value;
+  const end   = $('dashRangeEnd')?.value;
+  if (start && end) {
+    const fmt = d => { const [y, m, day] = d.split('-'); return `${m}/${day}/${y.slice(2)}`; };
+    setDashboardDateFilter('range', start, end, `${fmt(start)} – ${fmt(end)}`);
+  }
+}
+
 /* ================================
-   ADD FORM WITH LOCATION INTELLIGENCE
+   CUSTOM CHARTS
 ================================= */
+const CUSTOM_CHARTS_KEY = 'll_custom_charts';
+
+function loadCustomCharts() {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_CHARTS_KEY) || '[]'); } catch { return []; }
+}
+
+function saveCustomChartsToStorage(charts) {
+  localStorage.setItem(CUSTOM_CHARTS_KEY, JSON.stringify(charts));
+}
+
+function saveCustomChart(cfg) {
+  const charts = loadCustomCharts().filter(c => c.id !== cfg.id);
+  charts.push(cfg);
+  saveCustomChartsToStorage(charts.slice(0, 2));
+}
+
+function deleteCustomChart(id) {
+  saveCustomChartsToStorage(loadCustomCharts().filter(c => c.id !== id));
+  if (window.currentChartView === 'custom_' + id) {
+    window.currentChartView = 'pie';
+  }
+  renderDashboard();
+}
+
+function showAddCustomChartSheet(editId) {
+  const existing = editId ? loadCustomCharts().find(c => c.id === editId) : null;
+  const data = loadData();
+  const defs = (data.customFields || []).filter(d => d && (d.type === 'text' || d.type === 'date'));
+
+  const metricOptions = [
+    { v: 'total',     l: 'Total Income' },
+    { v: 'tips',      l: 'Tips' },
+    { v: 'base',      l: 'Base Pay' },
+    { v: 'hours',     l: 'Hours' },
+    { v: 'count',     l: 'Shift Count' },
+    { v: 'avg_shift', l: 'Avg per Shift' },
+    { v: 'avg_hour',  l: 'Avg per Hour' },
+  ];
+
+  const groupOptions = [
+    { v: 'location',  l: 'Location' },
+    { v: 'month',     l: 'Month' },
+    { v: 'week',      l: 'Week' },
+    { v: 'dayofweek', l: 'Day of Week' },
+    ...defs.map(d => ({ v: 'custom_' + d.key, l: d.label })),
+  ];
+
+  const curMetric  = existing?.metric  || 'total';
+  const curGroup   = existing?.groupBy || 'location';
+  const curLabel   = existing?.label   || '';
+  const newId      = existing?.id      || ('cc' + Date.now());
+
+  const html = `
+    <div id="addChartOverlay" class="fixed inset-0 bg-black/50 z-40" onclick="closeAddChartSheet()"></div>
+    <div id="addChartSheet" class="fixed bottom-0 inset-x-0 bg-gray-900 rounded-t-2xl p-5 z-50 transform transition-transform duration-300 translate-y-full" style="max-height:85vh;overflow-y:auto">
+      <div class="flex items-center justify-between mb-4">
+        <div class="text-lg font-bold">${existing ? 'Edit' : 'New'} Custom Chart</div>
+        <button onclick="closeAddChartSheet()" class="text-gray-400 text-xl leading-none">&times;</button>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <div class="text-xs text-gray-400 mb-1">Button Label</div>
+          <input id="cc_label" type="text" maxlength="18" placeholder="e.g. My Chart" value="${curLabel}"
+            class="w-full p-3 bg-gray-800 rounded text-gray-100 text-sm">
+        </div>
+
+        <div>
+          <div class="text-xs text-gray-400 mb-1">Metric</div>
+          <div class="grid grid-cols-2 gap-2">
+            ${metricOptions.map(o => `
+              <label class="flex items-center gap-2 bg-gray-800 rounded p-2 cursor-pointer">
+                <input type="radio" name="cc_metric" value="${o.v}" ${o.v === curMetric ? 'checked' : ''} class="accent-violet-500">
+                <span class="text-sm text-gray-200">${o.l}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+
+        <div>
+          <div class="text-xs text-gray-400 mb-1">Group By</div>
+          <select id="cc_group" class="w-full p-3 bg-gray-800 rounded text-gray-100 text-sm">
+            ${groupOptions.map(o => `<option value="${o.v}" ${o.v === curGroup ? 'selected' : ''}>${o.l}</option>`).join('')}
+          </select>
+        </div>
+
+        <button onclick="applyAddCustomChart('${newId}')"
+          class="w-full p-3 rounded font-semibold text-white"
+          style="background:linear-gradient(135deg,#7c3aed,#6366f1)">
+          ${existing ? 'Update Chart' : 'Add Chart'}
+        </button>
+
+        ${existing ? `<button onclick="deleteCustomChart('${existing.id}')" class="w-full p-3 rounded bg-red-900/50 text-red-400">Delete Chart</button>` : ''}
+        <button onclick="closeAddChartSheet()" class="w-full p-3 rounded bg-gray-700 text-gray-300">Cancel</button>
+      </div>
+    </div>
+  `;
+
+  const prev = $('addChartSheet');
+  if (prev) { prev.previousElementSibling?.remove(); prev.remove(); }
+  document.body.insertAdjacentHTML('beforeend', html);
+  requestAnimationFrame(() => {
+    $('addChartSheet')?.classList.remove('translate-y-full');
+  });
+}
+
+function closeAddChartSheet() {
+  const sheet = $('addChartSheet');
+  const overlay = $('addChartOverlay');
+  if (sheet) sheet.classList.add('translate-y-full');
+  if (overlay) overlay.classList.add('opacity-0');
+  setTimeout(() => { overlay?.remove(); sheet?.remove(); }, 300);
+}
+
+function applyAddCustomChart(id) {
+  const label = ($('cc_label')?.value || '').trim();
+  if (!label) { alert('Please enter a label.'); return; }
+  const metric  = document.querySelector('input[name="cc_metric"]:checked')?.value || 'total';
+  const groupBy = $('cc_group')?.value || 'location';
+
+  const metricLabels = { total:'Total Income', tips:'Tips', base:'Base Pay', hours:'Hours', count:'Shifts', avg_shift:'Avg/Shift', avg_hour:'Avg/Hour' };
+  const metricLabel = metricLabels[metric] || metric;
+
+  saveCustomChart({ id, label, metric, groupBy, metricLabel });
+  closeAddChartSheet();
+  window.currentChartView = 'custom_' + id;
+  renderDashboard();
+}
 
 /* ================================
    ADD FORM WITH LOCATION INTELLIGENCE
@@ -3004,9 +3240,28 @@ function renderHistory() {
   if (!isFiltered) {
     setupInfiniteScroll(months, monthTotals);
   }
-  
+
   // Update banner with visible month
   updateBannerForVisibleMonth();
+
+  // Immediately sync the sort indicator so it reflects the current sort state
+  // without waiting for the IntersectionObserver (which only fires on scroll).
+  const sortEl = $("sortIndicator");
+  if (sortEl) {
+    const isDefault = historySort.type === 'date' && historySort.direction === 'desc';
+    if (isDefault) {
+      sortEl.classList.add('hidden');
+      sortEl.textContent = '';
+    } else {
+      const arrow = historySort.direction === 'asc' ? '↑' : '↓';
+      let label;
+      if (historySort.type === 'date')        label = `Date ${arrow}`;
+      else if (historySort.type === 'total')  label = `Total ${arrow}`;
+      else label = `${historySort.key ? historySort.key.replace(/CustomField_/,'').replace(/_/g,' ') : 'Custom'} ${arrow}`;
+      sortEl.textContent = `⇅ ${label}`;
+      sortEl.classList.remove('hidden');
+    }
+  }
 }
 
 function showShiftDetail(id, createdAt) {
@@ -4263,9 +4518,12 @@ async function initServiceWorker() {
       });
     });
 
-    // After skipWaiting the controller changes — reload to run new code
+    // After skipWaiting the controller changes — reload to run new code.
+    // Guard with hadController so first-time SW activation (clients.claim on a
+    // page that had no previous controller) does NOT trigger a spurious reload.
+    const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      window.location.reload();
+      if (hadController) window.location.reload();
     });
   } catch (e) {
     console.warn('SW registration failed:', e);
@@ -4533,7 +4791,7 @@ function switchSuiteModule(id) {
 
   // Live app navigation — add new app paths here as they launch
   const APP_URLS = {
-    loss: '../LocaLoss/',
+    loss: '../Loss/',
   };
 
   if (id === 'labor') {
