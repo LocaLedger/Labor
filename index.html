@@ -139,6 +139,10 @@
   color: #94a3b8;
   padding: 5px 0;
 }
+/* Pre-declare utilities that only appear in dynamically-injected HTML so they
+   are available before the Tailwind CDN Play-mode JIT processes them.        */
+.bottom-20        { bottom: 5rem; }
+.translate-y-full { transform: translateY(100%); }
 </style>
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#111827" />
@@ -345,7 +349,7 @@
 const DATA_KEY    = "income_data";
 const META_KEY    = "income_meta";
 const DEV_MODE_KEY = "ll_dev_mode";
-const APP_VERSION = "1.3.0"; // bump this with every deploy (must match version.json)
+const APP_VERSION = "1.3.2"; // bump this with every deploy (must match version.json)
 
 /**
  * Crisp recurring/sync icon (Heroicons arrow-path, filled).
@@ -611,8 +615,8 @@ function showHistoryFilterMenu() {
         <div class="bg-gray-800/50 rounded p-3 space-y-2">
           <div class="text-xs text-gray-300">${d.label}</div>
           <div class="grid grid-cols-2 gap-2">
-            <input type="number" step="${step}" id="hf_${d.key}_min" placeholder="Min" value="${cur.min ?? ''}" class="w-full p-2 bg-gray-800 rounded text-sm text-gray-100">
-            <input type="number" step="${step}" id="hf_${d.key}_max" placeholder="Max" value="${cur.max ?? ''}" class="w-full p-2 bg-gray-800 rounded text-sm text-gray-100">
+            <input type="number" step="${step}" inputmode="${d.type === 'money' ? 'decimal' : 'numeric'}" id="hf_${d.key}_min" placeholder="Min" value="${cur.min ?? ''}" class="w-full p-2 bg-gray-800 rounded text-sm text-gray-100">
+            <input type="number" step="${step}" inputmode="${d.type === 'money' ? 'decimal' : 'numeric'}" id="hf_${d.key}_max" placeholder="Max" value="${cur.max ?? ''}" class="w-full p-2 bg-gray-800 rounded text-sm text-gray-100">
           </div>
           <div class="text-[11px] text-gray-400">Range: ${d.type === "money" ? money(r.min) : r.min} – ${d.type === "money" ? money(r.max) : r.max}</div>
         </div>
@@ -777,8 +781,8 @@ function showDashboardFilterMenu() {
         <div class="bg-gray-800/50 rounded p-3 space-y-2">
           <div class="text-xs text-gray-300">${d.label}</div>
           <div class="grid grid-cols-2 gap-2">
-            <input type="number" step="${step}" id="df_${d.key}_min" placeholder="Min" value="${cur.min ?? ''}" class="w-full p-2 bg-gray-800 rounded text-sm text-gray-100">
-            <input type="number" step="${step}" id="df_${d.key}_max" placeholder="Max" value="${cur.max ?? ''}" class="w-full p-2 bg-gray-800 rounded text-sm text-gray-100">
+            <input type="number" step="${step}" inputmode="${d.type === 'money' ? 'decimal' : 'numeric'}" id="df_${d.key}_min" placeholder="Min" value="${cur.min ?? ''}" class="w-full p-2 bg-gray-800 rounded text-sm text-gray-100">
+            <input type="number" step="${step}" inputmode="${d.type === 'money' ? 'decimal' : 'numeric'}" id="df_${d.key}_max" placeholder="Max" value="${cur.max ?? ''}" class="w-full p-2 bg-gray-800 rounded text-sm text-gray-100">
           </div>
           <div class="text-[11px] text-gray-400">Range: ${d.type === "money" ? money(r.min) : r.min} – ${d.type === "money" ? money(r.max) : r.max}</div>
         </div>
@@ -1387,6 +1391,9 @@ function updateBottomNavForEditMode(isEditing) {
 }
 
 function switchTab(tab) {
+  // Dismiss any open bottom-sheets/overlays before changing pages
+  document.querySelectorAll('[id$="Sheet"],[id$="Overlay"]').forEach(el => el.remove());
+
   // Save form data when leaving add tab (only if NOT in edit mode)
   if (activeTab === "add" && tab !== "add") {
     if (editModeRecord) {
@@ -1965,7 +1972,7 @@ function renderAdd(existing = null) {
     </div>
 
     <div class="relative">
-      <input type="number" step="0.25" name="hours" id="hoursInput" value="${r.hours ?? ''}" class="w-full p-3 bg-gray-800 rounded peer" tabindex="2" oninput="updateLabel('hoursLabel')" placeholder=" ">
+      <input type="number" step="0.25" inputmode="decimal" name="hours" id="hoursInput" value="${r.hours ?? ''}" class="w-full p-3 bg-gray-800 rounded peer" tabindex="2" oninput="updateLabel('hoursLabel')" placeholder=" ">
       <label id="hoursLabel" for="hoursInput" class="absolute left-3 top-3 text-gray-400 text-sm pointer-events-none transition-all duration-200 ${r.hours != null && r.hours !== '' ? 'top-0 text-xs text-indigo-400 -translate-y-2' : ''}">Hours Worked</label>
     </div>
 
@@ -1980,7 +1987,7 @@ function renderAdd(existing = null) {
       <input type="hidden" name="payType" id="payTypeInput" value="${r.payType || 'hourly'}">
       <div class="flex items-center gap-2">
         <div class="flex-1 relative">
-          <input type="number" step="0.01" name="rate" id="rateInput"
+          <input type="number" step="0.01" inputmode="decimal" name="rate" id="rateInput"
             value="${r.rate ?? ''}" class="w-full p-3 bg-gray-800 rounded peer" oninput="updateLabel('rateLabel')" placeholder=" ">
           <label id="rateLabel" for="rateInput" class="absolute left-3 top-3 text-gray-400 text-sm pointer-events-none transition-all duration-200 ${r.rate != null && r.rate !== '' ? 'top-0 text-xs text-indigo-400 -translate-y-2' : ''}">${(r.payType === 'flat') ? 'Flat Amount' : 'Hourly Rate'}</label>
         </div>
@@ -1990,7 +1997,7 @@ function renderAdd(existing = null) {
     </div>
 
     <div class="relative">
-      <input type="number" step="0.01" name="tips" id="tipsInput"
+      <input type="number" step="0.01" inputmode="decimal" name="tips" id="tipsInput"
         value="${r.tips ?? ''}" class="w-full p-3 bg-gray-800 rounded peer" oninput="updateLabel('tipsLabel')" placeholder=" ">
       <label id="tipsLabel" for="tipsInput" class="absolute left-3 top-3 text-gray-400 text-sm pointer-events-none transition-all duration-200 ${r.tips != null && r.tips !== '' ? 'top-0 text-xs text-indigo-400 -translate-y-2' : ''}">Tips</label>
     </div>
@@ -2308,7 +2315,7 @@ function setupCustomFields() {
     } else if (field.type === 'number') {
       return `
         <div class="relative">
-          <input type="number" name="${fieldId}" id="${fieldId}" value="${existingValue}" 
+          <input type="number" inputmode="numeric" name="${fieldId}" id="${fieldId}" value="${existingValue}"
             class="w-full p-3 bg-gray-800 rounded peer" placeholder=" " oninput="updateCustomFieldLabel('${fieldId}')">
           <label id="${fieldId}_label" for="${fieldId}" class="absolute left-3 top-3 text-gray-400 text-sm pointer-events-none transition-all duration-200 ${hasValue ? '-translate-y-2 top-0 text-xs text-indigo-400' : ''}">${field.label}</label>
         </div>
@@ -2317,7 +2324,7 @@ function setupCustomFields() {
       return `
         <div class="relative">
           <div class="absolute left-3 top-3 text-gray-400 text-sm pointer-events-none">$</div>
-          <input type="number" step="0.01" name="${fieldId}" id="${fieldId}" value="${existingValue}"
+          <input type="number" step="0.01" inputmode="decimal" name="${fieldId}" id="${fieldId}" value="${existingValue}"
             class="w-full p-3 pl-8 bg-gray-800 rounded peer" placeholder=" " oninput="updateCustomFieldLabel('${fieldId}')">
           <label id="${fieldId}_label" for="${fieldId}" class="absolute left-8 top-3 text-gray-400 text-sm pointer-events-none transition-all duration-200 ${hasValue ? '-translate-y-2 top-0 text-xs text-indigo-400' : ''}">${field.label}</label>
         </div>
