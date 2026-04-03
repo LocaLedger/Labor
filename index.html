@@ -40,9 +40,12 @@
 }
 .suite-drum {
   position: relative;
-  transition: transform 0.52s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
+  transform-origin: center;
 }
+#suiteLaunchBtn { transition: transform 0.12s ease; }
+#suiteLaunchBtn:active { transform: scale(0.97); }
 .suite-face {
   display: block;
   height: 44px;
@@ -190,14 +193,14 @@
     </div>
 
     <!-- Chevron -->
-    <svg id="suiteChevron" width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-left:2px;transition:transform 0.25s;flex-shrink:0">
+    <svg id="suiteChevron" width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-left:2px;transition:transform 0.32s cubic-bezier(0.34,1.56,0.64,1);flex-shrink:0">
       <path d="M2.5 4.5L6 8l3.5-3.5" stroke="#6366F1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   </button>
 
   <!-- Suite Launcher Panel (slides down from header) -->
   <div id="suiteLauncher" class="hidden absolute top-full left-0 right-0 z-50" style="border-top:1px solid rgba(99,102,241,0.12)">
-    <div class="px-4 pt-3 pb-4">
+    <div class="px-1 pt-3 pb-4">
       <div class="flex items-center justify-between mb-3">
         <span style="font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:#475569;letter-spacing:0.1em;text-transform:uppercase">LocaLedger Suite</span>
         <button onclick="closeSuiteLauncher()" style="color:#475569;font-size:18px;line-height:1;background:none;border:none;cursor:pointer;padding:2px 6px">×</button>
@@ -213,7 +216,7 @@
             <div style="font-size:12px;font-weight:700;color:#f1f5f9;font-family:'Space Mono',monospace">LocaLabor</div>
             <div style="font-size:10px;color:#818cf8;margin-top:1px">Income Tracking</div>
           </div>
-          <span style="font-size:9px;font-weight:700;background:#6366F1;color:#fff;padding:2px 6px;border-radius:999px;letter-spacing:0.06em;flex-shrink:0">LIVE</span>
+          <span style="font-size:9px;font-weight:700;background:#6366F1;color:#fff;padding:2px 6px;border-radius:999px;letter-spacing:0.06em;flex-shrink:0">⮕</span>
         </button>
 
         <!-- LocaLoss -->
@@ -225,7 +228,7 @@
             <div style="font-size:12px;font-weight:700;color:#f1f5f9;font-family:'Space Mono',monospace">LocaLoss</div>
             <div style="font-size:10px;color:#f87171;margin-top:1px">Spending Tracker</div>
           </div>
-          <span style="font-size:9px;font-weight:700;background:#F43F5E;color:#fff;padding:2px 6px;border-radius:999px;letter-spacing:0.06em;flex-shrink:0">LIVE</span>
+          <span style="font-size:9px;font-weight:700;background:#F43F5E;color:#fff;padding:2px 6px;border-radius:999px;letter-spacing:0.06em;flex-shrink:0">⮕</span>
         </button>
 
         <!-- LocaLimit -->
@@ -237,7 +240,7 @@
             <div style="font-size:12px;font-weight:700;color:#f1f5f9;font-family:'Space Mono',monospace">LocaLimit</div>
             <div style="font-size:10px;color:#fbbf24;margin-top:1px">Budget Intel</div>
           </div>
-          <span style="font-size:9px;font-weight:700;background:rgba(245,158,11,0.2);color:#fcd34d;padding:2px 6px;border-radius:999px;letter-spacing:0.06em;flex-shrink:0">SOON</span>
+          <span style="font-size:9px;font-weight:700;background:rgba(245,158,11,0.2);color:#fcd34d;padding:2px 6px;border-radius:999px;letter-spacing:0.06em;flex-shrink:0">SUITE</span>
         </button>
 
         <!-- LocaLoan -->
@@ -249,7 +252,7 @@
             <div style="font-size:12px;font-weight:700;color:#f1f5f9;font-family:'Space Mono',monospace">LocaLoan</div>
             <div style="font-size:10px;color:#fb923c;margin-top:1px">Loan Optimizer</div>
           </div>
-          <span style="font-size:9px;font-weight:700;background:rgba(249,115,22,0.2);color:#fdba74;padding:2px 6px;border-radius:999px;letter-spacing:0.06em;flex-shrink:0">SOON</span>
+          <span style="font-size:9px;font-weight:700;background:rgba(249,115,22,0.2);color:#fdba74;padding:2px 6px;border-radius:999px;letter-spacing:0.06em;flex-shrink:0">SUITE</span>
         </button>
 
         <!-- LocaLegacy -->
@@ -261,7 +264,7 @@
             <div style="font-size:12px;font-weight:700;color:#f1f5f9;font-family:'Space Mono',monospace">LocaLegacy</div>
             <div style="font-size:10px;color:#34d399;margin-top:1px">Investment Tracker</div>
           </div>
-          <span style="font-size:9px;font-weight:700;background:rgba(16,185,129,0.2);color:#6ee7b7;padding:2px 6px;border-radius:999px;letter-spacing:0.06em;flex-shrink:0">SOON</span>
+          <span style="font-size:9px;font-weight:700;background:rgba(16,185,129,0.2);color:#6ee7b7;padding:2px 6px;border-radius:999px;letter-spacing:0.06em;flex-shrink:0">SUITE</span>
         </button>
 
         <!-- LocaLiquid -->
@@ -273,7 +276,7 @@
             <div style="font-size:12px;font-weight:700;color:#f1f5f9;font-family:'Space Mono',monospace">LocaLiquid</div>
             <div style="font-size:10px;color:#22d3ee;margin-top:1px">Net Worth Engine</div>
           </div>
-          <span style="font-size:9px;font-weight:700;background:rgba(6,182,212,0.2);color:#67e8f9;padding:2px 6px;border-radius:999px;letter-spacing:0.06em;flex-shrink:0">SOON</span>
+          <span style="font-size:9px;font-weight:700;background:rgba(6,182,212,0.2);color:#67e8f9;padding:2px 6px;border-radius:999px;letter-spacing:0.06em;flex-shrink:0">SUITE</span>
         </button>
 
       </div><!-- /grid -->
@@ -309,7 +312,7 @@
 </div>
 
 <!-- Bottom Navigation -->
-<nav class="fixed bottom-0 inset-x-0 bg-gray-900 border-t border-gray-800 flex text-xs pb-2">
+<nav class="fixed bottom-0 left-0 right-0 z-40 flex" style="background:rgba(15,23,42,0.97);backdrop-filter:blur(12px);border-top:1px solid rgba(255,255,255,0.06);padding-bottom:env(safe-area-inset-bottom,0px)">
 <button data-tab="dashboard" class="tab flex-1 py-3 text-center text-gray-400">
 <div class="flex flex-col items-center gap-1">
 <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -1616,7 +1619,7 @@ function showChartDateFilter() {
     <div id="chartFilterSheet" class="fixed bottom-20 inset-x-0 bg-gray-900 rounded-t-xl p-4 z-50 transform transition-transform duration-300 translate-y-full">
       <div class="text-lg font-bold mb-4">Chart Date Range</div>
       <div class="space-y-2">
-        <button onclick="setChartDateFilter('all', null, null, 'All Time')" class="w-full bg-indigo-600 p-3 rounded text-left">📜 All Time</button>
+        <button onclick="setChartDateFilter('all', null, null, 'All Time')" class="w-full bg-indigo-600 p-3 rounded text-left">All Time</button>
         <button onclick="setChartDateFilter('month', null, null, 'This Month')" class="w-full bg-gray-800 p-3 rounded text-left">This Month</button>
         <button onclick="setChartDateFilter('past3months', null, null, 'Past 3 Months')" class="w-full bg-gray-800 p-3 rounded text-left">Past 3 Months</button>
         <button onclick="setChartDateFilter('ytd', null, null, 'Year to Date')" class="w-full bg-gray-800 p-3 rounded text-left">Year to Date</button>
@@ -2737,7 +2740,7 @@ function saveIncome(form, existing) {
 
   try {
     saveData(data);
-    showToast(editModeRecord ? "Entry updated! ✅" : "Entry added! ✅", 2000);
+    showToast(editModeRecord ? "Entry updated" : "Entry added", 2000);
     
     // Clear edit mode and form data
     if (editModeRecord) {
@@ -2867,7 +2870,7 @@ function showDateFilterMenu() {
     <div id="filterSheet" class="fixed bottom-20 inset-x-0 bg-gray-900 rounded-t-xl p-4 z-50 transform transition-transform duration-300 translate-y-full">
       <div class="text-lg font-bold mb-4">Select Date Range</div>
       <div class="space-y-2">
-        <button onclick="setDateFilter('all', null, null, 'All Time (Scroll)')" class="w-full bg-indigo-600 p-3 rounded text-left">📜 All Time (Infinite Scroll)</button>
+        <button onclick="setDateFilter('all', null, null, 'All Time (Scroll)')" class="w-full bg-indigo-600 p-3 rounded text-left">All Time (Infinite Scroll)</button>
         <button onclick="setDateFilter('month', null, null, 'This Month')" class="w-full bg-gray-800 p-3 rounded text-left">This Month</button>
         <button onclick="setDateFilter('ytd', null, null, 'Year to Date')" class="w-full bg-gray-800 p-3 rounded text-left">Year to Date</button>
         <button onclick="setDateFilter('past3months', null, null, 'Past 3 Months')" class="w-full bg-gray-800 p-3 rounded text-left">Past 3 Months</button>
@@ -3537,13 +3540,13 @@ function updateMonthlyTotal(records) {
     if (dateFilter.type === 'all') {
       indicatorEl.textContent = '∞';
     } else if (dateFilter.type === 'ytd') {
-      indicatorEl.textContent = '📅';
+      indicatorEl.textContent = 'YTD';
     } else if (dateFilter.type === 'month') {
-      indicatorEl.textContent = '📆';
+      indicatorEl.textContent = '1M';
     } else if (dateFilter.type === 'past3months') {
-      indicatorEl.textContent = '3';
+      indicatorEl.textContent = '3M';
     } else if (dateFilter.type === 'range') {
-      indicatorEl.textContent = '📋';
+      indicatorEl.textContent = '—';
     }
   }
 
@@ -3648,12 +3651,25 @@ function renderSettings() {
     </div>
   `).join("");
 
+  const _laborAuth = _getLocaAuth();
+  const _laborSuite = _hasSuiteAccess();
+  const _suiteUpsell = (_laborAuth && !_laborSuite) ? `
+    <a href="${_LAUNCH_URL}?goto=pricing" style="display:flex;align-items:center;gap:10px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:12px;padding:12px 14px;text-decoration:none;color:inherit">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" style="flex-shrink:0"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#818cf8;margin-bottom:2px">More with LocaLedger Suite</div>
+        <div style="font-size:10px;color:#475569;line-height:1.5">Unlock LocaLimit (budget envelopes), LocaLoan, LocaLegacy, and cross-app data intelligence starting at $3.99/mo.</div>
+      </div>
+    </a>` : '';
+
   $("app").innerHTML = `
   <div class="p-4 space-y-4 pb-24">
     <div class="flex items-center justify-between">
       <div class="text-xl font-bold">Settings</div>
       <div class="text-[10px] text-right text-gray-400">Manage locations, fields, and backups</div>
     </div>
+
+    ${_suiteUpsell}
 
     <div class="bg-gray-900/40 border border-gray-700/60 rounded-xl p-4 space-y-3">
       <div class="flex items-center justify-between">
@@ -4657,6 +4673,14 @@ const SUITE_MODULES = [
   { id: 'liquid', label: 'Liquid', color: '#06B6D4', desc: 'Net Worth Engine' },
 ];
 
+/* ── Suite auth helpers ─────────────────────────── */
+const _IS_DEV_APP = ['localhost','127.0.0.1'].includes(location.hostname);
+const _LAUNCH_URL  = _IS_DEV_APP
+  ? `${location.protocol}//${location.hostname}${location.port?':'+location.port:''}/Launch/`
+  : 'https://launch.n8.wtf';
+function _getLocaAuth() { try { return JSON.parse(localStorage.getItem('locaAuth')||'null'); } catch { return null; } }
+function _hasSuiteAccess() { const a=_getLocaAuth(); return a&&(a.subscription==='suite'||a.subscription==='bundle'); }
+
 let _drumIdx = 0;          // logical face index (0-5)
 let _drumStep = 0;         // CSS position counter (resets after wrap)
 let _drumInterval = null;  // auto-rotate interval (hover/open only)
@@ -4773,6 +4797,11 @@ function _suiteLauncherOutsideClick(e) {
 
 function switchSuiteModule(id) {
   closeSuiteLauncher();
+  // Gate suite-required apps
+  if (id === 'limit' && !_hasSuiteAccess()) {
+    window.location.href = _LAUNCH_URL;
+    return;
+  }
   _activeModule = id;
 
   // Update suite button active states

@@ -4,7 +4,7 @@
   "start_url": ".",
   "display": "standalone",
   "background_color": "#0f172a",
-  "theme_color": "#111827",
+  "theme_color": "#6366F1",
   "description": "Offline income tracker — log shifts, hours, tips and see what you really earn",
   "icons": [
     {
