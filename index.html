@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>LocaLedger</title>
+<title>LocaLabor</title>
 
 <!-- Pre-initialize Tailwind config before the CDN loads so the JIT
      engine picks up custom fontSize tokens on its first DOM scan.
@@ -148,7 +148,7 @@
 .translate-y-full { transform: translateY(100%); }
 </style>
 <link rel="manifest" href="manifest.json" />
-<meta name="theme-color" content="#111827" />
+<meta name="theme-color" content="#6366F1" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 </head>
@@ -283,6 +283,7 @@
     </div>
   </div><!-- /suiteLauncher -->
 
+  <div style="display:flex;align-items:center;gap:6px">
   <!-- Settings (kept) -->
   <button data-tab="settings" class="tab p-2 text-gray-400">
     <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -290,6 +291,8 @@
       <circle cx="12" cy="12" r="3"/>
     </svg>
   </button>
+    <div id="authBadge" style="display:none;align-items:center"></div>
+  </div>
 </header>
 
 <main id="app" class="flex-1 overflow-y-auto pb-40"></main>
@@ -658,7 +661,7 @@ function showHistoryFilterMenu() {
         <div class="bg-gray-800/50 rounded p-3">
           <label class="flex items-center gap-2 text-xs text-gray-300/80">
             <input type="checkbox" id="hf_${d.key}_onlyChecked" class="accent-indigo-500" ${cur.onlyChecked ? 'checked' : ''}>
-            <span>Only show when “${d.label}” is checked</span>
+            <span>Only show when "${d.label}" is checked</span>
           </label>
         </div>
       `;
@@ -792,45 +795,63 @@ function showDashboardFilterMenu() {
       `;
     }).join("");
 
-  const menu = `
-    <div id=”dashboardFilterOverlay” class=”fixed inset-0 bg-black/50 z-40 transition-opacity” onclick=”closeDashboardFilterMenu()”></div>
-    <div id=”dashboardFilterSheet” class=”fixed bottom-20 inset-x-0 max-h-[70vh] overflow-y-auto bg-gray-900 rounded-t-xl p-4 z-50 transform transition-transform duration-300 translate-y-full”>
-      <div class=”flex items-center justify-between mb-3”>
-        <div class=”text-lg font-bold”>Filters</div>
-        <button onclick=”resetDashboardFilters()” class=”text-xs text-gray-400”>Reset</button>
-      </div>
+  const existing = $("dashboardFilterSheet");
+  if (existing) existing.remove();
+  const existingOvl = $("dashboardFilterOverlay");
+  if (existingOvl) existingOvl.remove();
 
-      <div class=”space-y-3”>
-        ${textSections}
-        ${numericSections}
+  const overlay = document.createElement("div");
+  overlay.id = "dashboardFilterOverlay";
+  overlay.onclick = closeDashboardFilterMenu;
+  Object.assign(overlay.style, {
+    position:"fixed",inset:"0",background:"rgba(0,0,0,0.6)",zIndex:"40",
+    opacity:"0",transition:"opacity 0.25s ease"
+  });
 
-        <button onclick="applyDashboardFiltersFromUI()" class="w-full bg-indigo-600 p-3 rounded font-semibold">Apply</button>
-        <button onclick="closeDashboardFilterMenu()" class="w-full bg-gray-700 p-3 rounded">Close</button>
-      </div>
+  const sheet = document.createElement("div");
+  sheet.id = "dashboardFilterSheet";
+  Object.assign(sheet.style, {
+    position:"fixed",bottom:"0",left:"0",right:"0",
+    maxHeight:"72vh",overflowY:"auto",
+    background:"#111827",borderRadius:"16px 16px 0 0",padding:"20px 16px",
+    zIndex:"50",transform:"translateY(100%)",
+    transition:"transform 0.32s cubic-bezier(0.32,0.72,0,1)",
+    fontFamily:"'Space Mono',monospace",
+    paddingBottom:"calc(20px + env(safe-area-inset-bottom,0px))"
+  });
+
+  sheet.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:#f1f5f9">Filters</div>
+      <button onclick="resetDashboardFilters()" style="font-size:11px;color:#64748b;background:none;border:none;font-family:'Space Mono',monospace;cursor:pointer">Reset</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      ${textSections || ""}
+      ${numericSections || ""}
+      <button onclick="applyDashboardFiltersFromUI()" style="width:100%;padding:14px;border-radius:10px;background:#6366F1;color:#fff;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;border:none;cursor:pointer">Apply</button>
+      <button onclick="closeDashboardFilterMenu()" style="width:100%;padding:13px;border-radius:10px;background:none;border:none;color:#64748b;font-family:'Space Mono',monospace;font-size:12px;cursor:pointer">Close</button>
     </div>
   `;
 
-  const existing = $("dashboardFilterSheet");
-  if (existing) existing.remove();
-  document.body.insertAdjacentHTML("beforeend", menu);
-
+  document.body.appendChild(overlay);
+  document.body.appendChild(sheet);
   requestAnimationFrame(() => {
-    const sheet = $("dashboardFilterSheet");
-    const overlay = $("dashboardFilterOverlay");
-    if (sheet) sheet.classList.remove("translate-y-full");
-    if (overlay) overlay.classList.remove("opacity-0");
+    requestAnimationFrame(() => {
+      overlay.style.opacity = "1";
+      sheet.style.transform = "translateY(0)";
+    });
   });
 }
 
 function closeDashboardFilterMenu() {
   const sheet = $("dashboardFilterSheet");
   const overlay = $("dashboardFilterOverlay");
-  if (sheet) sheet.classList.add("translate-y-full");
-  if (overlay) overlay.classList.add("opacity-0");
+  if (sheet) sheet.style.transform = "translateY(100%)";
+  if (overlay) overlay.style.opacity = "0";
   setTimeout(() => {
-    if (overlay) overlay.remove();
     if (sheet) sheet.remove();
-  }, 250);
+    if (overlay) overlay.remove();
+  }, 340);
 }
 
 function resetDashboardFilters() {
@@ -1437,6 +1458,13 @@ function switchTab(tab) {
     banner.classList.toggle("hidden", tab !== "history");
   }
 
+  // Adjust bottom padding: history needs room for banner + nav (~160px),
+  // other tabs only need room for nav (~80px)
+  const appEl = $("app");
+  if (appEl) {
+    appEl.style.paddingBottom = tab === "history" ? "" : "80px";
+  }
+
   // Add transition effect
   const app = $("app");
   app.style.opacity = "0";
@@ -1662,6 +1690,11 @@ function setChartDateFilter(type, start, end, label) {
 
 /* ── Dashboard date picker ─────────────────────────────────────── */
 function showDashboardDatePicker() {
+  const existing = $('dashDateSheet');
+  if (existing) existing.remove();
+  const existingOvl = $('dashDateOverlay');
+  if (existingOvl) existingOvl.remove();
+
   const opts = [
     { type: 'all',         label: 'All Time' },
     { type: 'month',       label: 'This Month' },
@@ -1669,48 +1702,64 @@ function showDashboardDatePicker() {
     { type: 'ytd',         label: 'Year to Date' },
   ];
 
-  const menu = `
-    <div id="dashDateOverlay" class="fixed inset-0 bg-black/50 z-40" onclick="closeDashDatePicker()"></div>
-    <div id="dashDateSheet" class="fixed bottom-20 inset-x-0 bg-gray-900 rounded-t-xl p-4 z-50 transform transition-transform duration-300 translate-y-full">
-      <div class="text-lg font-bold mb-4">Date Range</div>
-      <div class="space-y-2">
-        ${opts.map(o => `
-          <button onclick="setDashboardDateFilter('${o.type}', null, null, '${o.label}')"
-            class="w-full p-3 rounded text-left flex items-center justify-between ${dashboardDateFilter.type === o.type ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-200'}">
-            <span>${o.label}</span>
-            ${dashboardDateFilter.type === o.type ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>' : ''}
-          </button>
-        `).join('')}
-        <button onclick="showDashboardCustomRangePicker()"
-          class="w-full p-3 rounded text-left flex items-center justify-between ${dashboardDateFilter.type === 'range' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-200'}">
-          <span>${dashboardDateFilter.type === 'range' ? dashboardDateFilter.label : 'Custom Range...'}</span>
-          ${dashboardDateFilter.type === 'range'
-            ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>'
-            : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>'}
-        </button>
-      </div>
-      <button onclick="closeDashDatePicker()" class="w-full bg-gray-700 p-3 rounded mt-4">Cancel</button>
-    </div>
+  const overlay = document.createElement('div');
+  overlay.id = 'dashDateOverlay';
+  overlay.onclick = closeDashDatePicker;
+  Object.assign(overlay.style, {
+    position:'fixed', inset:'0', background:'rgba(0,0,0,0.6)', zIndex:'40',
+    opacity:'0', transition:'opacity 0.25s ease'
+  });
+
+  const sheet = document.createElement('div');
+  sheet.id = 'dashDateSheet';
+  Object.assign(sheet.style, {
+    position:'fixed', bottom:'0', left:'0', right:'0',
+    background:'#111827', borderRadius:'16px 16px 0 0', padding:'20px 16px',
+    zIndex:'50', transform:'translateY(100%)',
+    transition:'transform 0.32s cubic-bezier(0.32,0.72,0,1)',
+    fontFamily:"'Space Mono',monospace",
+    paddingBottom:'calc(20px + env(safe-area-inset-bottom,0px))'
+  });
+
+  const btnBase = 'width:100%;padding:14px;border-radius:10px;text-align:left;display:flex;align-items:center;justify-content:space-between;font-family:\'Space Mono\',monospace;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px;';
+  const btnActive   = btnBase + 'background:#6366F1;color:#fff;';
+  const btnInactive = btnBase + 'background:rgba(255,255,255,0.05);color:#e2e8f0;';
+  const checkSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>';
+  const chevSvg  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>';
+
+  sheet.innerHTML = `
+    <div style="font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:16px">Date Range</div>
+    ${opts.map(o => `
+      <button style="${dashboardDateFilter.type === o.type ? btnActive : btnInactive}" onclick="setDashboardDateFilter('${o.type}',null,null,'${o.label}')">
+        <span>${o.label}</span>${dashboardDateFilter.type === o.type ? checkSvg : ''}
+      </button>
+    `).join('')}
+    <button style="${dashboardDateFilter.type === 'range' ? btnActive : btnInactive}" onclick="showDashboardCustomRangePicker()">
+      <span>${dashboardDateFilter.type === 'range' ? dashboardDateFilter.label : 'Custom Range...'}</span>
+      ${dashboardDateFilter.type === 'range' ? checkSvg : chevSvg}
+    </button>
+    <button style="width:100%;padding:13px;border-radius:10px;background:none;border:none;color:#64748b;font-family:'Space Mono',monospace;font-size:12px;cursor:pointer;margin-top:4px" onclick="closeDashDatePicker()">Cancel</button>
   `;
 
-  const existing = $('dashDateSheet');
-  if (existing) existing.remove();
-  document.body.insertAdjacentHTML('beforeend', menu);
+  document.body.appendChild(overlay);
+  document.body.appendChild(sheet);
   requestAnimationFrame(() => {
-    const sheet = $('dashDateSheet');
-    const overlay = $('dashDateOverlay');
-    if (sheet) sheet.classList.remove('translate-y-full');
+    requestAnimationFrame(() => {
+      overlay.style.opacity = '1';
+      sheet.style.transform = 'translateY(0)';
+    });
   });
 }
 
 function closeDashDatePicker() {
   const sheet = $('dashDateSheet');
   const overlay = $('dashDateOverlay');
-  if (sheet) sheet.classList.add('translate-y-full');
+  if (sheet) sheet.style.transform = 'translateY(100%)';
+  if (overlay) overlay.style.opacity = '0';
   setTimeout(() => {
     if (sheet) sheet.remove();
     if (overlay) overlay.remove();
-  }, 250);
+  }, 340);
 }
 
 function setDashboardDateFilter(type, start, end, label) {
@@ -1721,6 +1770,7 @@ function setDashboardDateFilter(type, start, end, label) {
 
 function showDashboardCustomRangePicker() {
   closeDashDatePicker();
+
   const today = new Date().toISOString().split('T')[0];
   const twoWeeksAgo = new Date();
   twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
@@ -1728,32 +1778,51 @@ function showDashboardCustomRangePicker() {
   const startVal = dashboardDateFilter.type === 'range' ? (dashboardDateFilter.startDate || twoWeeksAgoStr) : twoWeeksAgoStr;
   const endVal   = dashboardDateFilter.type === 'range' ? (dashboardDateFilter.endDate   || today) : today;
 
-  const menu = `
-    <div id="dashDateOverlay" class="fixed inset-0 bg-black/50 z-40" onclick="closeDashDatePicker()"></div>
-    <div id="dashDateSheet" class="fixed bottom-20 inset-x-0 bg-gray-900 rounded-t-xl p-4 z-50 transform transition-transform duration-300 translate-y-full">
-      <div class="text-lg font-bold mb-4">Custom Range</div>
-      <div class="space-y-4">
-        <div>
-          <label class="text-sm text-gray-400">Start Date</label>
-          <input type="date" id="dashRangeStart" value="${startVal}" class="w-full p-3 mt-1 bg-transparent text-gray-100 appearance-none border border-gray-700 rounded">
-        </div>
-        <div>
-          <label class="text-sm text-gray-400">End Date</label>
-          <input type="date" id="dashRangeEnd" value="${endVal}" class="w-full p-3 mt-1 bg-transparent text-gray-100 appearance-none border border-gray-700 rounded">
-        </div>
-        <button onclick="applyDashboardCustomRange()" class="w-full bg-indigo-600 p-3 rounded font-semibold">Apply</button>
-      </div>
-      <button onclick="closeDashDatePicker()" class="w-full bg-gray-700 p-3 rounded mt-4">Cancel</button>
-    </div>
-  `;
+  setTimeout(() => {
+    const overlay = document.createElement('div');
+    overlay.id = 'dashDateOverlay';
+    overlay.onclick = closeDashDatePicker;
+    Object.assign(overlay.style, {
+      position:'fixed', inset:'0', background:'rgba(0,0,0,0.6)', zIndex:'40',
+      opacity:'0', transition:'opacity 0.25s ease'
+    });
 
-  const existing = $('dashDateSheet');
-  if (existing) existing.remove();
-  document.body.insertAdjacentHTML('beforeend', menu);
-  requestAnimationFrame(() => {
-    const sheet = $('dashDateSheet');
-    if (sheet) sheet.classList.remove('translate-y-full');
-  });
+    const sheet = document.createElement('div');
+    sheet.id = 'dashDateSheet';
+    Object.assign(sheet.style, {
+      position:'fixed', bottom:'0', left:'0', right:'0',
+      background:'#111827', borderRadius:'16px 16px 0 0', padding:'20px 16px',
+      zIndex:'50', transform:'translateY(100%)',
+      transition:'transform 0.32s cubic-bezier(0.32,0.72,0,1)',
+      fontFamily:"'Space Mono',monospace",
+      paddingBottom:'calc(20px + env(safe-area-inset-bottom,0px))'
+    });
+
+    const inputStyle = "width:100%;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#f1f5f9;font-size:14px;font-family:'Space Mono',monospace;outline:none;box-sizing:border-box;color-scheme:dark";
+
+    sheet.innerHTML = `
+      <div style="font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:16px">Custom Range</div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:#64748b;margin-bottom:6px">Start Date</div>
+        <input type="date" id="dashRangeStart" value="${startVal}" style="${inputStyle}">
+      </div>
+      <div style="margin-bottom:20px">
+        <div style="font-size:11px;color:#64748b;margin-bottom:6px">End Date</div>
+        <input type="date" id="dashRangeEnd" value="${endVal}" style="${inputStyle}">
+      </div>
+      <button onclick="applyDashboardCustomRange()" style="width:100%;padding:14px;border-radius:10px;background:#6366F1;color:#fff;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px">Apply Range</button>
+      <button onclick="closeDashDatePicker()" style="width:100%;padding:13px;border-radius:10px;background:none;border:none;color:#64748b;font-family:'Space Mono',monospace;font-size:12px;cursor:pointer">Cancel</button>
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(sheet);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        overlay.style.opacity = '1';
+        sheet.style.transform = 'translateY(0)';
+      });
+    });
+  }, 350);
 }
 
 function applyDashboardCustomRange() {
@@ -2861,62 +2930,69 @@ function getFilteredRecords(records) {
 }
 
 function showDateFilterMenu() {
-  // Flip arrow to point up when menu is open
-  const arrowEl = document.getElementById("filterArrow");
-  if (arrowEl) { arrowEl.style.transform = "rotate(180deg)"; }
-  
-  const menu = `
-    <div id="filterOverlay" class="fixed inset-0 bg-black/50 z-40 transition-opacity" onclick="closeFilterMenu()"></div>
-    <div id="filterSheet" class="fixed bottom-20 inset-x-0 bg-gray-900 rounded-t-xl p-4 z-50 transform transition-transform duration-300 translate-y-full">
-      <div class="text-lg font-bold mb-4">Select Date Range</div>
-      <div class="space-y-2">
-        <button onclick="setDateFilter('all', null, null, 'All Time (Scroll)')" class="w-full bg-indigo-600 p-3 rounded text-left">All Time (Infinite Scroll)</button>
-        <button onclick="setDateFilter('month', null, null, 'This Month')" class="w-full bg-gray-800 p-3 rounded text-left">This Month</button>
-        <button onclick="setDateFilter('ytd', null, null, 'Year to Date')" class="w-full bg-gray-800 p-3 rounded text-left">Year to Date</button>
-        <button onclick="setDateFilter('past3months', null, null, 'Past 3 Months')" class="w-full bg-gray-800 p-3 rounded text-left">Past 3 Months</button>
-        <button onclick="showCustomRangePicker()" class="w-full bg-gray-800 p-3 rounded text-left">Custom Range...</button>
-      </div>
-      <button onclick="closeFilterMenu()" class="w-full bg-gray-700 p-3 rounded mt-4">Cancel</button>
-    </div>
-  `;
-  
-  // Remove existing if any
+  const arrowEl = $("filterArrow");
+  if (arrowEl) arrowEl.style.transform = "rotate(180deg)";
+
   const existing = $("filterSheet");
   if (existing) existing.remove();
-  
-  document.body.insertAdjacentHTML("beforeend", menu);
-  
-  // Animate in
+  const existingOvl = $("filterOverlay");
+  if (existingOvl) existingOvl.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "filterOverlay";
+  overlay.onclick = closeFilterMenu;
+  Object.assign(overlay.style, {
+    position:"fixed",inset:"0",background:"rgba(0,0,0,0.6)",zIndex:"40",
+    opacity:"0",transition:"opacity 0.25s ease"
+  });
+
+  const sheet = document.createElement("div");
+  sheet.id = "filterSheet";
+  Object.assign(sheet.style, {
+    position:"fixed",bottom:"0",left:"0",right:"0",
+    background:"#111827",borderRadius:"16px 16px 0 0",padding:"20px 16px",
+    zIndex:"50",transform:"translateY(100%)",transition:"transform 0.32s cubic-bezier(0.32,0.72,0,1)",
+    fontFamily:"'Space Mono',monospace",paddingBottom:"calc(20px + env(safe-area-inset-bottom,0px))"
+  });
+
+  const btnStyle = (active) =>
+    `width:100%;padding:14px 16px;border-radius:10px;text-align:left;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px;` +
+    (active ? "background:#6366F1;color:#fff;" : "background:rgba(255,255,255,0.06);color:#f1f5f9;");
+
+  sheet.innerHTML = `
+    <div style="width:36px;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin:0 auto 18px">
+    </div>
+    <div style="font-size:11px;font-weight:700;color:#475569;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px">Date Range</div>
+    <button style="${btnStyle(dateFilter.type==='all')}" onclick="setDateFilter('all',null,null,'All Time')">∞ All Time</button>
+    <button style="${btnStyle(dateFilter.type==='month')}" onclick="setDateFilter('month',null,null,'This Month')">This Month</button>
+    <button style="${btnStyle(dateFilter.type==='ytd')}" onclick="setDateFilter('ytd',null,null,'Year to Date')">Year to Date</button>
+    <button style="${btnStyle(dateFilter.type==='past3months')}" onclick="setDateFilter('past3months',null,null,'Past 3 Months')">Past 3 Months</button>
+    <button style="${btnStyle(false)}" onclick="showCustomRangePicker()">Custom Range →</button>
+    <button style="width:100%;padding:14px;border-radius:10px;text-align:center;font-family:'Space Mono',monospace;font-size:12px;color:#64748b;background:none;border:none;cursor:pointer;margin-top:4px" onclick="closeFilterMenu()">Cancel</button>
+  `;
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(sheet);
+
   requestAnimationFrame(() => {
-    const sheet = $("filterSheet");
-    const overlay = $("filterOverlay");
-    if (sheet) sheet.classList.remove("translate-y-full");
-    if (overlay) overlay.classList.remove("opacity-0");
+    requestAnimationFrame(() => {
+      overlay.style.opacity = "1";
+      sheet.style.transform = "translateY(0)";
+    });
   });
 }
 
 function closeFilterMenu() {
   const sheet = $("filterSheet");
   const overlay = $("filterOverlay");
-  
-  // Animate out
-  if (sheet) {
-    sheet.classList.add("translate-y-full");
-  }
-  if (overlay) {
-    overlay.classList.add("opacity-0");
-  }
-  
+  if (sheet) sheet.style.transform = "translateY(100%)";
+  if (overlay) overlay.style.opacity = "0";
   setTimeout(() => {
-    if (overlay) overlay.remove();
     if (sheet) sheet.remove();
-  }, 300);
-  
-  // Reset arrow to point down
+    if (overlay) overlay.remove();
+  }, 320);
   const arrowEl = $("filterArrow");
-  if (arrowEl) {
-    arrowEl.style.transform = "rotate(0deg)";
-  }
+  if (arrowEl) arrowEl.style.transform = "rotate(0deg)";
 }
 
 function setDateFilter(type, start, end, label) {
@@ -2926,42 +3002,52 @@ function setDateFilter(type, start, end, label) {
 }
 
 function showCustomRangePicker() {
-  closeFilterMenu();
   const today = new Date().toISOString().split("T")[0];
   const twoWeeksAgo = new Date();
   twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
   const twoWeeksAgoStr = twoWeeksAgo.toISOString().split("T")[0];
-  
-  const menu = `
-    <div id="filterOverlay" class="fixed inset-0 bg-black/50 z-40 transition-opacity" onclick="closeFilterMenu()"></div>
-    <div id="filterSheet" class="fixed bottom-20 inset-x-0 bg-gray-900 rounded-t-xl p-4 z-50 transform transition-transform duration-300 translate-y-full">
-      <div class="text-lg font-bold mb-4">Custom Range</div>
-      <div class="space-y-4">
-        <div>
-          <label class="text-sm text-gray-400">Start Date</label>
-          <input type="date" id="rangeStart" value="${twoWeeksAgoStr}" class="w-full p-3 bg-transparent text-gray-100 appearance-none">
-        </div>
-        <div>
-          <label class="text-sm text-gray-400">End Date</label>
-          <input type="date" id="rangeEnd" value="${today}" class="w-full p-3 bg-transparent text-gray-100 appearance-none">
-        </div>
-        <button onclick="applyCustomRange()" class="w-full bg-indigo-600 p-3 rounded">Apply</button>
-      </div>
-      <button onclick="closeFilterMenu()" class="w-full bg-gray-700 p-3 rounded mt-4">Cancel</button>
+
+  const overlay = document.createElement("div");
+  overlay.id = "filterOverlay";
+  overlay.onclick = closeFilterMenu;
+  Object.assign(overlay.style, {
+    position:"fixed",inset:"0",background:"rgba(0,0,0,0.6)",zIndex:"40",
+    opacity:"0",transition:"opacity 0.25s ease"
+  });
+
+  const sheet = document.createElement("div");
+  sheet.id = "filterSheet";
+  Object.assign(sheet.style, {
+    position:"fixed",bottom:"0",left:"0",right:"0",
+    background:"#111827",borderRadius:"16px 16px 0 0",padding:"20px 16px",
+    zIndex:"50",transform:"translateY(100%)",transition:"transform 0.32s cubic-bezier(0.32,0.72,0,1)",
+    fontFamily:"'Space Mono',monospace",paddingBottom:"calc(20px + env(safe-area-inset-bottom,0px))"
+  });
+
+  const inputStyle = "width:100%;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#f1f5f9;font-family:'Space Mono',monospace;font-size:13px;box-sizing:border-box;margin-top:6px;-webkit-appearance:none;appearance:none;color-scheme:dark";
+  sheet.innerHTML = `
+    <div style="width:36px;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin:0 auto 18px"></div>
+    <div style="font-size:11px;font-weight:700;color:#475569;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px">Custom Range</div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;color:#64748b;margin-bottom:4px">Start Date</div>
+      <input type="date" id="rangeStart" value="${twoWeeksAgoStr}" style="${inputStyle}">
     </div>
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;color:#64748b;margin-bottom:4px">End Date</div>
+      <input type="date" id="rangeEnd" value="${today}" style="${inputStyle}">
+    </div>
+    <button onclick="applyCustomRange()" style="width:100%;padding:14px;border-radius:10px;background:#6366F1;color:#fff;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px">Apply Range</button>
+    <button onclick="closeFilterMenu()" style="width:100%;padding:14px;border-radius:10px;background:none;color:#64748b;font-family:'Space Mono',monospace;font-size:12px;border:none;cursor:pointer">Cancel</button>
   `;
-  
-  const existing = $("filterSheet");
-  if (existing) existing.remove();
-  
-  document.body.insertAdjacentHTML("beforeend", menu);
-  
-  // Animate in
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(sheet);
+
   requestAnimationFrame(() => {
-    const sheet = $("filterSheet");
-    const overlay = $("filterOverlay");
-    if (sheet) sheet.classList.remove("translate-y-full");
-    if (overlay) overlay.classList.remove("opacity-0");
+    requestAnimationFrame(() => {
+      overlay.style.opacity = "1";
+      sheet.style.transform = "translateY(0)";
+    });
   });
 }
 
@@ -5228,5 +5314,6 @@ initServiceWorker();
 
 <!-- Onboarding: shown once on first launch when no records exist -->
 <script src="onboarding.js" defer></script>
+<script src="../shared/auth-badge.js" defer></script>
 </body>
 </html>
