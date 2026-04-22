@@ -5299,8 +5299,10 @@ function _suiteLauncherOutsideClick(e) {
 function switchSuiteModule(id) {
   closeSuiteLauncher();
   // Gate suite-required apps
-  if (id === 'limit' && !_hasSuiteAccess()) {
-    window.location.href = _LAUNCH_URL;
+  if (['limit','loan','legacy','liquid'].includes(id) && !_hasSuiteAccess()) {
+    const label = (SUITE_MODULES.find(m => m.id === id)||{}).label || id;
+    const toast = encodeURIComponent(`Suite is required to use "Loca${label}"`);
+    window.location.href = `${_LAUNCH_URL}?goto=pricing&highlight=suite&toast=${toast}`;
     return;
   }
   _activeModule = id;
