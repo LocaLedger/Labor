@@ -146,6 +146,41 @@
    are available before the Tailwind CDN Play-mode JIT processes them.        */
 .bottom-20        { bottom: 5rem; }
 .translate-y-full { transform: translateY(100%); }
+
+/* ── Time Clock ────────────────────────────────────────────────── */
+.tc-toggle-track {
+  width: 44px; height: 24px; border-radius: 12px;
+  background: #374151; transition: background 0.22s;
+  position: relative; cursor: pointer; display: inline-block;
+  flex-shrink: 0; border: 1px solid rgba(255,255,255,0.06);
+}
+.tc-toggle-track.on { background: #6366F1; }
+.tc-toggle-thumb {
+  position: absolute; top: 3px; left: 3px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: white; transition: left 0.22s cubic-bezier(0.34,1.56,0.64,1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.45);
+}
+.tc-toggle-track.on .tc-toggle-thumb { left: 23px; }
+
+@keyframes breakSlideIn {
+  from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.break-animate-in { animation: breakSlideIn 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+
+@keyframes tcDigitPop {
+  0%   { transform: scale(1);    opacity: 1; }
+  50%  { transform: scale(1.04); opacity: 0.85; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+.tc-tick { animation: tcDigitPop 0.18s ease; }
+
+@keyframes earningsCountUp {
+  from { opacity: 0.4; transform: translateY(4px); }
+  to   { opacity: 1;   transform: translateY(0); }
+}
+.earnings-animate-in { animation: earningsCountUp 0.3s ease forwards; }
 </style>
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#6366F1" />
@@ -357,7 +392,7 @@
 const DATA_KEY    = "income_data";
 const META_KEY    = "income_meta";
 const DEV_MODE_KEY = "ll_dev_mode";
-const APP_VERSION = "1.3.2"; // bump this with every deploy (must match version.json)
+const APP_VERSION = "1.3.3"; // bump this with every deploy (must match version.json)
 
 /**
  * Crisp recurring/sync icon (Heroicons arrow-path, filled).
@@ -1355,6 +1390,18 @@ let _recurringEnabled = false;
 let _recurringFreq    = 7;   // days between occurrences
 let _recurringEnd     = "";  // ISO date string or "" for auto (startDate + 2 years)
 
+/* ── Time Clock state ─────────────────────────────────────────── */
+let _timeClockEnabled   = false;
+let _clockRunning       = false;
+let _clockTotalMs       = 0;      // accumulated ms before current run segment
+let _clockStartTs       = null;   // Date.now() when current segment started
+let _clockInterval      = null;
+let _breakRunning       = false;
+let _breakTotalMs       = 0;
+let _breakStartTs       = null;
+let _breakInterval      = null;
+let _breakEverStarted   = false;  // whether break row has been shown at least once
+
 document.querySelectorAll(".tab").forEach(btn => {
   btn.onclick = () => {
     let targetTab = btn.dataset.tab;
@@ -2024,15 +2071,24 @@ function renderAdd(existing = null) {
   ` : '';
 
   const buttonHtml = isEditMode ? editRecurBanner : `
-    <div class="flex gap-2 flex-wrap">
-      <button type="button" onclick="clearForm()" class="text-xs bg-gray-700 px-2 py-1 rounded">Clear</button>
-      <button type="button" id="recurToggleBtn"
-        onclick="${_recurringEnabled ? 'disableRecurring()' : 'openRecurringPopup()'}"
-        class="text-xs px-2 py-1 rounded flex items-center gap-1 ${_recurringEnabled ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}">
-        ${_recurSvg('w-3 h-3')}
-        ${_recurringEnabled ? (recurFreqLabel + ' ×') : 'Recurring'}
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex gap-2 flex-wrap items-center">
+        <button type="button" onclick="clearForm()" class="text-xs bg-gray-700 px-2 py-1 rounded">Clear</button>
+        <button type="button" id="recurToggleBtn"
+          onclick="${_recurringEnabled ? 'disableRecurring()' : 'openRecurringPopup()'}"
+          class="text-xs px-2 py-1 rounded flex items-center gap-1 ${_recurringEnabled ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}">
+          ${_recurSvg('w-3 h-3')}
+          ${_recurringEnabled ? (recurFreqLabel + ' ×') : 'Recurring'}
+        </button>
+        ${devMode ? `<button type="button" onclick="devSetupDemoWorkspace()" class="text-xs bg-purple-600 px-2 py-1 rounded">Demo Workspace</button>` : ''}
+      </div>
+      <button type="button" onclick="toggleTimeClock()" title="Time Clock"
+        class="flex items-center gap-1.5 shrink-0 select-none" style="background:none;border:none;padding:2px 0;cursor:pointer">
+        <span style="font-size:11px;color:${_timeClockEnabled ? '#818cf8' : '#6b7280'}">⏱</span>
+        <div id="tcToggleTrack" class="tc-toggle-track ${_timeClockEnabled ? 'on' : ''}">
+          <div class="tc-toggle-thumb"></div>
+        </div>
       </button>
-      ${devMode ? `<button type="button" onclick="devSetupDemoWorkspace()" class="text-xs bg-purple-600 px-2 py-1 rounded">Demo Workspace</button>` : ''}
     </div>
   `;
 
@@ -2045,9 +2101,57 @@ function renderAdd(existing = null) {
       <label id="dateLabel" for="dateInput" class="absolute left-3 top-3 text-gray-400 text-sm pointer-events-none transition-all duration-200 ${r.date ? 'top-0 text-xs text-indigo-400' : ''}">Date</label>
     </div>
 
+    <!-- ── Time Clock Panel ── shown below date when time clock is enabled -->
+    <div id="timeClockPanel" class="${_timeClockEnabled ? '' : 'hidden'}">
+      <div class="rounded-xl p-4 space-y-3" style="background:rgba(15,15,30,0.7);border:1px solid rgba(99,102,241,0.22)">
+
+        <!-- Shift timer display -->
+        <div id="shiftTimerBlock" class="text-center transition-all duration-300">
+          <div id="mainTimerDisplay" class="font-mono font-bold tracking-widest transition-all duration-300"
+            style="font-size:2.6rem;line-height:1;letter-spacing:0.06em;color:#c7d2fe">00:00:00</div>
+          <div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(99,102,241,0.5);margin-top:4px">Shift Time</div>
+        </div>
+
+        <!-- Break timer row — hidden until first break -->
+        <div id="breakTimerRow" class="hidden">
+          <div class="text-center">
+            <div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(251,191,36,0.45);margin-bottom:2px">On Break</div>
+            <div id="breakTimerDisplay" class="font-mono font-bold"
+              style="font-size:2.6rem;line-height:1;letter-spacing:0.06em;color:#fbbf24">00:00:00</div>
+          </div>
+        </div>
+
+        <!-- Controls: Start/Stop + Break -->
+        <div class="flex gap-2">
+          <button type="button" id="clockStartStopBtn" onclick="clockStartStop()"
+            class="flex-1 py-2.5 rounded-lg text-sm font-bold"
+            style="background:rgba(22,163,74,0.18);color:#4ade80;border:1px solid rgba(22,163,74,0.3);font-family:'Space Mono',monospace">
+            Start
+          </button>
+          <button type="button" id="clockBreakBtn" onclick="clockBreak()"
+            class="py-2.5 px-4 rounded-lg text-sm font-bold"
+            style="background:rgba(180,83,9,0.18);color:#fb923c;border:1px solid rgba(180,83,9,0.3);font-family:'Space Mono',monospace">
+            Break
+          </button>
+        </div>
+
+        <!-- Earnings counter — shown when hourly rate is set -->
+        <div id="earningsDisplay" class="hidden text-center pt-2.5" style="border-top:1px solid rgba(255,255,255,0.06)">
+          <div id="earningsCounter" class="font-mono font-bold" style="font-size:1.6rem;color:#4ade80">$0.00</div>
+          <div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#374151;margin-top:2px">Est. Earned (pre-tax)</div>
+        </div>
+      </div>
+    </div>
+
     <div class="relative">
-      <input type="number" step="0.25" inputmode="decimal" name="hours" id="hoursInput" value="${r.hours ?? ''}" class="w-full p-3 bg-gray-800 rounded peer" tabindex="2" oninput="updateLabel('hoursLabel')" placeholder=" ">
-      <label id="hoursLabel" for="hoursInput" class="absolute left-3 top-3 text-gray-400 text-sm pointer-events-none transition-all duration-200 ${r.hours != null && r.hours !== '' ? 'top-0 text-xs text-indigo-400 -translate-y-2' : ''}">Hours Worked</label>
+      <input type="number" step="0.001" inputmode="decimal" name="hours" id="hoursInput"
+        value="${r.hours ?? ''}"
+        class="w-full p-3 bg-gray-800 rounded peer${_timeClockEnabled ? ' opacity-60' : ''}"
+        tabindex="2" oninput="updateLabel('hoursLabel')" placeholder=" "
+        ${_timeClockEnabled ? 'readonly style="cursor:not-allowed"' : ''}>
+      <label id="hoursLabel" for="hoursInput" class="absolute left-3 top-3 text-gray-400 text-sm pointer-events-none transition-all duration-200 ${r.hours != null && r.hours !== '' ? 'top-0 text-xs text-indigo-400 -translate-y-2' : ''}">
+        ${_timeClockEnabled ? '⏱ Hours (auto)' : 'Hours Worked'}
+      </label>
     </div>
 
     <div class="relative">
@@ -2062,7 +2166,8 @@ function renderAdd(existing = null) {
       <div class="flex items-center gap-2">
         <div class="flex-1 relative">
           <input type="number" step="0.01" inputmode="decimal" name="rate" id="rateInput"
-            value="${r.rate ?? ''}" class="w-full p-3 bg-gray-800 rounded peer" oninput="updateLabel('rateLabel')" placeholder=" ">
+            value="${r.rate ?? ''}" class="w-full p-3 bg-gray-800 rounded peer"
+            oninput="updateLabel('rateLabel');if(_timeClockEnabled)_updateEarningsVisibility();" placeholder=" ">
           <label id="rateLabel" for="rateInput" class="absolute left-3 top-3 text-gray-400 text-sm pointer-events-none transition-all duration-200 ${r.rate != null && r.rate !== '' ? 'top-0 text-xs text-indigo-400 -translate-y-2' : ''}">${(r.payType === 'flat') ? 'Flat Amount' : 'Hourly Rate'}</label>
         </div>
         <button type="button" onclick="setPayType('hourly')" class="text-xs px-2 py-2 rounded ${r.payType !== 'flat' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300'}">Hourly</button>
@@ -2074,6 +2179,15 @@ function renderAdd(existing = null) {
       <input type="number" step="0.01" inputmode="decimal" name="tips" id="tipsInput"
         value="${r.tips ?? ''}" class="w-full p-3 bg-gray-800 rounded peer" oninput="updateLabel('tipsLabel')" placeholder=" ">
       <label id="tipsLabel" for="tipsInput" class="absolute left-3 top-3 text-gray-400 text-sm pointer-events-none transition-all duration-200 ${r.tips != null && r.tips !== '' ? 'top-0 text-xs text-indigo-400 -translate-y-2' : ''}">Tips</label>
+    </div>
+
+    <!-- Break Time field — only visible in time clock mode -->
+    <div id="breakTimeField" class="${_timeClockEnabled ? '' : 'hidden'} relative">
+      <input type="text" id="breakTimeDisplay" readonly value="—"
+        class="w-full p-3 rounded peer cursor-default"
+        style="background:rgba(120,53,15,0.12);border:1px solid rgba(180,83,9,0.2);color:#fb923c;font-family:'Space Mono',monospace">
+      <label class="absolute left-3 pointer-events-none" style="top:0;transform:translateY(-50%);font-size:10px;color:rgba(251,191,36,0.6);letter-spacing:0.06em">Break Time</label>
+      <input type="hidden" name="breakTime" id="breakTimeInput" value="0">
     </div>
 
     <!-- Custom Fields Section -->
@@ -2095,6 +2209,7 @@ function renderAdd(existing = null) {
   setupCustomFields();
   setupLocationAutocomplete();
   setTimeout(() => setPayType(r.payType || 'hourly', true), 0);
+  setTimeout(() => setupTimeClock(), 0);
 
   // Initialize labels based on existing values
   setTimeout(() => {
@@ -2275,6 +2390,304 @@ function toggleRecurring() {
   } else {
     openRecurringPopup();
   }
+}
+
+/* ================================
+   TIME CLOCK
+================================= */
+
+function toggleTimeClock() {
+  // If disabling while running, stop cleanly
+  if (_timeClockEnabled) {
+    if (_clockInterval) { clearInterval(_clockInterval); _clockInterval = null; }
+    if (_breakInterval) { clearInterval(_breakInterval); _breakInterval = null; }
+    _clockRunning    = false;
+    _breakRunning    = false;
+    _clockTotalMs    = 0;
+    _clockStartTs    = null;
+    _breakTotalMs    = 0;
+    _breakStartTs    = null;
+    _breakEverStarted = false;
+  }
+
+  _timeClockEnabled = !_timeClockEnabled;
+
+  const track       = $('tcToggleTrack');
+  const panel       = $('timeClockPanel');
+  const breakField  = $('breakTimeField');
+  const hoursInput  = $('hoursInput');
+  const hoursLabel  = $('hoursLabel');
+
+  if (_timeClockEnabled) {
+    track?.classList.add('on');
+    panel?.classList.remove('hidden');
+    breakField?.classList.remove('hidden');
+    if (hoursInput) {
+      hoursInput.readOnly = true;
+      hoursInput.style.cursor = 'not-allowed';
+      hoursInput.classList.add('opacity-60');
+      hoursInput.value = '';
+    }
+    if (hoursLabel) hoursLabel.textContent = '⏱ Hours (auto)';
+    updateLabel('hoursLabel');
+    _updateEarningsVisibility();
+  } else {
+    track?.classList.remove('on');
+    panel?.classList.add('hidden');
+    breakField?.classList.add('hidden');
+    if (hoursInput) {
+      hoursInput.readOnly = false;
+      hoursInput.style.cursor = '';
+      hoursInput.classList.remove('opacity-60');
+      hoursInput.value = '';
+    }
+    if (hoursLabel) hoursLabel.textContent = 'Hours Worked';
+    updateLabel('hoursLabel');
+  }
+}
+
+function setupTimeClock() {
+  if (!_timeClockEnabled) return;
+
+  // Restore displayed values after a re-render
+  _clockTick();
+
+  // Restart main interval if clock was running
+  if (_clockRunning) {
+    if (_clockInterval) clearInterval(_clockInterval);
+    _clockInterval = setInterval(_clockTick, 500);
+    const btn = $('clockStartStopBtn');
+    if (btn) _setStartStopStyle(btn, true);
+  }
+
+  // Restore break row if ever started
+  if (_breakEverStarted) {
+    const row = $('breakTimerRow');
+    if (row) row.classList.remove('hidden');
+    _breakTick();
+    if (_breakRunning) {
+      if (_breakInterval) clearInterval(_breakInterval);
+      _breakInterval = setInterval(_breakTick, 500);
+      // Restore OVER button state
+      const breakBtn = $('clockBreakBtn');
+      if (breakBtn) {
+        breakBtn.textContent = 'OVER';
+        breakBtn.onclick = clockBreakOver;
+        breakBtn.style.background = 'rgba(180,83,9,0.45)';
+        breakBtn.style.color = '#fed7aa';
+        breakBtn.style.borderColor = 'rgba(180,83,9,0.6)';
+      }
+      // Shrink shift timer block
+      const shiftBlock = $('shiftTimerBlock');
+      if (shiftBlock) {
+        shiftBlock.style.fontSize = '0.85rem';
+        shiftBlock.style.opacity = '0.4';
+        shiftBlock.style.transform = 'scale(0.78)';
+        shiftBlock.style.transformOrigin = 'top center';
+      }
+    }
+  }
+
+  _updateBreakTimeDisplay();
+  _updateEarningsVisibility();
+}
+
+function clockStartStop() {
+  const btn = $('clockStartStopBtn');
+  if (_clockRunning) {
+    // ── Stop ──
+    _clockTotalMs += Date.now() - _clockStartTs;
+    _clockStartTs = null;
+    clearInterval(_clockInterval);
+    _clockInterval = null;
+    _clockRunning = false;
+    _clockTick();
+    if (btn) _setStartStopStyle(btn, false);
+  } else {
+    // ── Start ──
+    if (_breakRunning) return; // can't start while on break
+    _clockStartTs = Date.now();
+    _clockRunning = true;
+    _clockInterval = setInterval(_clockTick, 500);
+    _clockTick();
+    if (btn) _setStartStopStyle(btn, true);
+  }
+}
+
+function clockBreak() {
+  if (!_clockRunning) return;
+
+  // Pause the main clock
+  _clockTotalMs += Date.now() - _clockStartTs;
+  _clockStartTs = null;
+  clearInterval(_clockInterval);
+  _clockInterval = null;
+  _clockRunning = false;
+
+  const startStopBtn = $('clockStartStopBtn');
+  if (startStopBtn) _setStartStopStyle(startStopBtn, false);
+
+  // Swap displays: hide shift timer, show break timer (big)
+  const shiftBlock = $('shiftTimerBlock');
+  if (shiftBlock) {
+    shiftBlock.style.fontSize = '0.85rem';
+    shiftBlock.style.opacity = '0.4';
+    shiftBlock.style.transform = 'scale(0.78)';
+    shiftBlock.style.transformOrigin = 'top center';
+  }
+
+  // Start the break clock
+  _breakRunning = true;
+  _breakStartTs = Date.now();
+
+  const row = $('breakTimerRow');
+  if (row) {
+    if (!_breakEverStarted) {
+      _breakEverStarted = true;
+      row.classList.remove('hidden');
+      row.classList.add('break-animate-in');
+    } else {
+      row.classList.remove('hidden');
+    }
+  }
+
+  if (_breakInterval) clearInterval(_breakInterval);
+  _breakInterval = setInterval(_breakTick, 500);
+  _breakTick();
+
+  // Break button becomes OVER
+  const breakBtn = $('clockBreakBtn');
+  if (breakBtn) {
+    breakBtn.textContent = 'OVER';
+    breakBtn.onclick = clockBreakOver;
+    breakBtn.style.background = 'rgba(180,83,9,0.45)';
+    breakBtn.style.color = '#fed7aa';
+    breakBtn.style.borderColor = 'rgba(180,83,9,0.6)';
+  }
+}
+
+function clockBreakOver() {
+  if (!_breakRunning) return;
+
+  // Stop break clock
+  _breakTotalMs += Date.now() - _breakStartTs;
+  _breakStartTs = null;
+  clearInterval(_breakInterval);
+  _breakInterval = null;
+  _breakRunning = false;
+
+  _breakTick();
+  _updateBreakTimeDisplay();
+
+  // Hide break timer row
+  const row = $('breakTimerRow');
+  if (row) row.classList.add('hidden');
+
+  // Restore shift timer to full size
+  const shiftBlock = $('shiftTimerBlock');
+  if (shiftBlock) {
+    shiftBlock.style.fontSize = '';
+    shiftBlock.style.opacity = '';
+    shiftBlock.style.transform = '';
+    shiftBlock.style.transformOrigin = '';
+  }
+
+  // Break button reverts to "Break"
+  const breakBtn = $('clockBreakBtn');
+  if (breakBtn) {
+    breakBtn.textContent = 'Break';
+    breakBtn.onclick = clockBreak;
+    breakBtn.style.background = 'rgba(180,83,9,0.18)';
+    breakBtn.style.color = '#fb923c';
+    breakBtn.style.borderColor = 'rgba(180,83,9,0.3)';
+  }
+
+  // Auto-resume the main shift clock
+  _clockStartTs = Date.now();
+  _clockRunning = true;
+  if (_clockInterval) clearInterval(_clockInterval);
+  _clockInterval = setInterval(_clockTick, 500);
+  _clockTick();
+
+  const startStopBtn = $('clockStartStopBtn');
+  if (startStopBtn) _setStartStopStyle(startStopBtn, true);
+}
+
+function _clockTick() {
+  const elapsed = _clockTotalMs + (_clockRunning && _clockStartTs ? Date.now() - _clockStartTs : 0);
+
+  const disp = $('mainTimerDisplay');
+  if (disp) disp.textContent = _msToHMS(elapsed);
+
+  // Auto-fill hours worked field
+  const hoursEl = $('hoursInput');
+  if (hoursEl && hoursEl.readOnly) {
+    const hrs = elapsed / 3600000;
+    hoursEl.value = hrs > 0 ? hrs.toFixed(4) : '';
+    updateLabel('hoursLabel');
+  }
+
+  _updateEarningsDisplay(elapsed);
+}
+
+function _breakTick() {
+  const elapsed = _breakTotalMs + (_breakRunning && _breakStartTs ? Date.now() - _breakStartTs : 0);
+  const disp = $('breakTimerDisplay');
+  if (disp) disp.textContent = _msToHMS(elapsed);
+}
+
+function _msToHMS(ms) {
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function _setStartStopStyle(btn, running) {
+  if (running) {
+    btn.textContent = 'Stop';
+    btn.style.background = 'rgba(220,38,38,0.2)';
+    btn.style.color = '#f87171';
+    btn.style.borderColor = 'rgba(220,38,38,0.35)';
+  } else {
+    btn.textContent = 'Start';
+    btn.style.background = 'rgba(22,163,74,0.18)';
+    btn.style.color = '#4ade80';
+    btn.style.borderColor = 'rgba(22,163,74,0.3)';
+  }
+}
+
+function _updateEarningsDisplay(elapsedMs) {
+  const rateEl   = $('rateInput');
+  const earningsEl = $('earningsDisplay');
+  const counter    = $('earningsCounter');
+  if (!earningsEl || !counter) return;
+
+  const rate = parseFloat(rateEl?.value || '0');
+  if (!rate || rate <= 0 || !_timeClockEnabled) {
+    earningsEl.classList.add('hidden');
+    return;
+  }
+
+  const earned = (elapsedMs / 3600000) * rate;
+  earningsEl.classList.remove('hidden');
+  counter.textContent = `$${earned.toFixed(2)}`;
+}
+
+function _updateEarningsVisibility() {
+  if (!_timeClockEnabled) return;
+  const elapsed = _clockTotalMs + (_clockRunning && _clockStartTs ? Date.now() - _clockStartTs : 0);
+  _updateEarningsDisplay(elapsed);
+}
+
+function _updateBreakTimeDisplay() {
+  const breakHrs    = _breakTotalMs / 3600000;
+  const breakDisp   = $('breakTimeDisplay');
+  const breakInput  = $('breakTimeInput');
+  if (breakDisp) {
+    breakDisp.value = breakHrs > 0 ? _msToHMS(_breakTotalMs) : '—';
+  }
+  if (breakInput) breakInput.value = breakHrs.toFixed(4);
 }
 
 /* ================================
